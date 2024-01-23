@@ -354,9 +354,9 @@ added_note = ""
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
 for i in range(num_cities):
-    print(f"{i+1}: \t {dist_matrix[i]}")
+    print(f"{i}: \t {dist_matrix[i]}")
 
-def BFS():
+def DFS(max_depth):
     newid = 0
     S = []
     P = []
@@ -382,14 +382,17 @@ def BFS():
 
     F = [(newid, S[0], P[0], A[0], PC[0], D[0])]
 
+    prev_depth = -1
+    nodes = []
+    for i in range(max_depth+1):
+        nodes.append(0)
     lowest = cost
     path = []
 
-    max_it = 1000000
-
-    while F and max_it > 0:
+    while F:
         node = F.pop()
-        max_it -= 1
+
+        nodes[node[5]] += 1
 
         actions = []
         for i in range(num_cities-1):
@@ -425,10 +428,24 @@ def BFS():
             # if len(S[newid]) == num_cities:
             #     return (newid, S[newid], P[newid], A[newid], PC[newid], D[newid])
 
-            F.append((newid, S[newid], P[newid], A[newid], PC[newid], D[newid]))
+            if node[5] < max_depth:
+                F.append((newid, S[newid], P[newid], A[newid], PC[newid], D[newid]))
+    print(nodes)
     return (lowest, path)
 
-res = BFS()
+def iterative_deepening():
+    lowest = 900
+    path = []
+
+    for i in range(1,4):
+        res = DFS(i)
+        if res[0] < lowest:
+            lowest = res[0]
+            path = res[1]
+    
+    return (lowest, path)
+
+res = iterative_deepening()
 print(res)
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
