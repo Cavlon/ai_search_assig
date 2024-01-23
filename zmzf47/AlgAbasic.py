@@ -364,55 +364,77 @@ def BFS():
     PC = []
     D = []
 
-    S.append([])
+    state = []
+    for i in range(num_cities):
+        state.append(i)
+
+    S.append(state)
     P.append(-1)
     A.append(-1)
-    PC.append(0)
+
+    cost = 0
+    for i in range(num_cities-1):
+        cost += dist_matrix[i][i+1]
+    cost += dist_matrix[num_cities-1][0]
+
+    PC.append(cost)
     D.append(0)
 
     F = [(newid, S[0], P[0], A[0], PC[0], D[0])]
 
+    print(F)
+
     max_depth = 0
+    lowest = cost
+    path = []
 
-    while F:
+    max_it = 1000000
+
+    while F and max_it > 0:
         node = F.pop()
+        max_it -= 1
 
-        if node[5] > max_depth:
-            max_depth += 1
-            print(max_depth)
+        # if node[5] > max_depth:
+        #     max_depth += 1
+        #     # print(max_depth)
+        #     print(lowest)
 
         actions = []
-        if node[1]:
-            for i in range(num_cities):
-                if i not in node[1]:
-                    actions.append(i)
-        else:
-            for i in range(num_cities):
-                actions.append(i)
+        for i in range(num_cities-1):
+            for j in range(i+1, num_cities):
+                if node[3] != (i, j) and node[1][i] < node[1][j]:
+                    actions.append((i, j))
         
         for action in actions:
             newid += 1
-            if node[1]:
-                copy = node[1].copy()
-                copy.append(action)
-                S.append(copy)
 
-            else:
-                S.append([action])
+            copy = node[1].copy()
+            copy[action[0]], copy[action[1]] = copy[action[1]], copy[action[0]]
+            S.append(copy)
+
             P.append(node[0])
             A.append(action)
-            if node[1]:
-                PC.append(node[4] + dist_matrix[node[1][-1]][action])
-            else:
-                PC.append(0)
+            cost = 0
+            for i in range(num_cities-1):
+                cost += dist_matrix[copy[i]][copy[i+1]]
+            cost += dist_matrix[copy[num_cities-1]][copy[0]]
+
+            if cost < lowest:
+                lowest = cost
+                path = copy
+
+
+            PC.append(cost)
+
             D.append(node[5] + 1)
 
             # print(S)
 
-            if len(S[newid]) == num_cities:
-                return (newid, S[newid], P[newid], A[newid], PC[newid], D[newid])
+            # if len(S[newid]) == num_cities:
+            #     return (newid, S[newid], P[newid], A[newid], PC[newid], D[newid])
 
             F.append((newid, S[newid], P[newid], A[newid], PC[newid], D[newid]))
+    return (lowest, path)
 
 res = BFS()
 print(res)
