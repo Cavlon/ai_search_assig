@@ -353,8 +353,8 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-for i in range(num_cities):
-    print(f"{i}: \t {dist_matrix[i]}")
+# for i in range(num_cities):
+#     print(f"{i}: \t {dist_matrix[i]}")
 
 def heuristic(state):
     if len(state) == num_cities:
@@ -368,78 +368,48 @@ def heuristic(state):
             dist = dist_matrix[last_city][i]
             if full:
                 dist += dist_matrix[i][first_city]
-            if dist < lowest:
-                lowest = dist
+
+            lowest = min(lowest, dist)
     return lowest
 
-
 def a_star():
-    newid = 0
-    S = []
-    P = []
-    A = []
-    PC = []
-    D = []
-
-    S.append([0])
-    P.append(-1)
-    A.append(-1)
-
-    PC.append(0)
-    D.append(0)
-
-    F = [(newid, S[0], P[0], A[0], PC[0], D[0])]
-
-    prev = 0
-
+    F = [([0], 0)]
+    evals = [heuristic([0])]
     while F:
-        lowest = heuristic(F[0][1]) + F[0][4]
-        best = 0
-        for i in range(1, len(F)):
-            evaluation = heuristic(F[i][1]) + F[i][4]
-            if evaluation < lowest:
-                lowest = evaluation
-                best = i
+        lowest = min(evals)
+        ind = evals.index(lowest)
+        node = F[ind]
 
-        if lowest > prev:
-            print(lowest)
-            prev = lowest
-
-        node = F[best]
-        del F[best]
-
-        if len(node[1]) == num_cities:
-            return (node[4], node[1])
+        if node[1] == lowest:
+            return node
+        
+        del F[ind]
+        del evals[ind]
 
         actions = []
         for i in range(num_cities):
-            if i in node[1]:
+            if i in node[0]:
                 continue
             actions.append(i)
         
+        full = (len(node[0]) == num_cities-1)
         for action in actions:
-            newid += 1
 
-            copy = node[1].copy()
+            copy = node[0].copy()
             copy.append(action)
-            S.append(copy)
 
-            P.append(node[0])
-            A.append(action)
-
-            cost = node[4] + dist_matrix[copy[-2]][copy[-1]]
-            if len(copy) == num_cities:
+            cost = node[1] + dist_matrix[copy[-2]][copy[-1]]
+            if full:
                 cost += dist_matrix[copy[-1]][copy[0]]
 
-            PC.append(cost)
-
-            D.append(node[5] + 1)
-
-            F.append((newid, S[newid], P[newid], A[newid], PC[newid], D[newid]))
+            F.append((copy, cost))
+            evals.append(heuristic(copy) + cost)
     return False
 
 res = a_star()
-print(res)
+tour = res[0]
+tour_length = res[1]
+# print(res)
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
 ############
