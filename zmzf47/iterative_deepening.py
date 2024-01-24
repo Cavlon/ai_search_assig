@@ -292,7 +292,7 @@ my_last_name = "Dantis"
 ############
 ############ END OF SECTOR 7 (IGNORE THIS COMMENT)
 
-algorithm_code = "US"
+algorithm_code = "ID"
 
 ############ START OF SECTOR 8 (IGNORE THIS COMMENT)
 ############
