@@ -15,6 +15,7 @@ import os
 import sys
 import time
 import random
+import heapq
 
 ############ START OF SECTOR 0 (IGNORE THIS COMMENT)
 ############
@@ -157,7 +158,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile012.txt"
+input_file = "AISearchfile017.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -359,51 +360,65 @@ added_note = ""
 def heuristic(state):
     if len(state) == num_cities:
         return 0
-    lowest = sys.maxsize
+    
     last_city = state[-1]
-    first_city = state[0]
-    full = (len(state) == num_cities-1)
-    for i in range(num_cities):
-        if i not in state:
-            dist = dist_matrix[last_city][i]
-            if full:
-                dist += dist_matrix[i][first_city]
+    check_cities = set(range(num_cities)) - set(state)
 
-            lowest = min(lowest, dist)
-    return lowest
+    last_dists = dist_matrix[last_city]
+
+    if len(check_cities) == 1:
+        city = next(iter(check_cities))
+        return last_dists[city] + dist_matrix[city][state[0]]
+    
+    targets = (last_dists[i] for i in check_cities)
+
+    return min(targets)
 
 def a_star():
-    F = [([0], 0)]
-    evals = [heuristic([0])]
+    root = ([0], 0)
+    F = [(heuristic([0]), root)]
+    heapq.heapify(F)
+    prev = 0
     while F:
-        lowest = min(evals)
-        ind = evals.index(lowest)
-        node = F[ind]
+        entry = heapq.heappop(F)
+        score = entry[0]
+        node = entry[1]
 
-        if node[1] == lowest:
+        pc = node[1]
+
+        if score > prev:
+            prev = score
+            print(prev)
+
+        if pc == score:
             return node
         
-        del F[ind]
-        del evals[ind]
+        state = node[0]
 
-        actions = []
-        for i in range(num_cities):
-            if i in node[0]:
-                continue
-            actions.append(i)
+        actions = set(range(num_cities)) - set(node[0])
         
-        full = (len(node[0]) == num_cities-1)
+        full = (len(actions) == 1)
+        last_city_dists = dist_matrix[state[-1]]
         for action in actions:
 
-            copy = node[0].copy()
+            copy = state.copy()
             copy.append(action)
 
-            cost = node[1] + dist_matrix[copy[-2]][copy[-1]]
+            cost = pc + last_city_dists[action]
             if full:
-                cost += dist_matrix[copy[-1]][copy[0]]
+                cost += dist_matrix[action][copy[0]]
 
-            F.append((copy, cost))
-            evals.append(heuristic(copy) + cost)
+            evaluation = heuristic(copy) + cost
+
+            new_node = (copy, cost)
+            heapq.heappush(F, (evaluation, new_node))
+
+            # if full:
+            #     for key in F.keys():
+            #         if key > evaluation:
+            #             del F[key]
+            #             evals.pop(key)
+            #     heapq.heapify(evals)
     return False
 
 res = a_star()
