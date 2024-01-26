@@ -16,6 +16,7 @@ import sys
 import time
 import random
 import heapq
+import numbers
 
 ############ START OF SECTOR 0 (IGNORE THIS COMMENT)
 ############
@@ -158,7 +159,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile012.txt"
+input_file = "AISearchfile017.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -378,34 +379,17 @@ def heuristic(parent_state, action, sorted_dists):
         if city not in avoid:
             return city
 
-def a_star():
-    sorted_dists = sort_dists()
-
-    prev = 0
+def a_star(f_max, sorted_dists, final):
+    goals = []
     all_cities = set(range(num_cities))
     root = ([], 0, 0)
-    init_eval = heuristic([], 0, sorted_dists)
 
-    F = {init_eval : [root]}
-    evals = [init_eval]
-
-    lowest_goal = sys.maxsize
+    F = [root]
+    next_thresh = sys.maxsize
     while F:
-        score = evals[0]
-        node = F[score].pop()
-
-        if len(F[score]) == 0:
-            del F[score]
-            heapq.heappop(evals)
+        node = F.pop()
 
         pc = node[1]
-
-        # if score > prev:
-        #     prev = score
-        #     print(prev)
-
-        if pc == score:
-            return node
         
         state = node[0].copy()
         state.append(node[2])
@@ -413,6 +397,10 @@ def a_star():
         actions = all_cities - set(state)
         
         tot_actions = len(actions)
+
+        if tot_actions == 0:
+            return node
+
         full = (tot_actions == 1)
         alm_full = (tot_actions == 2)
         last_city_dists = dist_matrix[state[-1]]
@@ -421,13 +409,12 @@ def a_star():
             cost = pc + last_city_dists[action]
             if full:
                 cost += dist_matrix[action][state[0]]
-                if cost > lowest_goal:
-                    continue
-                lowest_goal = cost
                 evaluation = cost
+                if not final:
+                    return (evaluation, True)
+                else:
+                    goals.append((evaluation, node))
             else:
-                if cost > lowest_goal:
-                    continue
                 if alm_full:
                     check = all_cities - set(state) - {action}
                     city = next(iter(check))
@@ -435,21 +422,33 @@ def a_star():
                 else:
                     evaluation = heuristic(state, action, sorted_dists) + cost
 
-            if evaluation > lowest_goal:
+            if evaluation > f_max:
+                if evaluation < next_thresh:
+                    next_thresh = evaluation
                 continue
+
             new_node = (state, cost, action)
+            F.append(new_node)
+    if final:
+        return min(goals, key=lambda x : x[0])[1]
+    return next_thresh
 
-            # print(evalset)
-            # print(F)
-            # breakpoint()
-            if evaluation in F:               
-                F[evaluation].append(new_node)
-            else:
-                heapq.heappush(evals, evaluation)
-                F[evaluation] = [new_node]
-    return False
+def iterative_deepening():
+    sorted_dists = sort_dists()
+    thresh = heuristic([], 0, sorted_dists)
+    while True:
+        res = a_star(thresh, sorted_dists, False)
+        if isinstance(res, numbers.Number):
+            if res == sys.maxsize:
+                return False
+            thresh = res
+            print(thresh)            
+        else:
+            thresh = res[0]
+            print(thresh)
+            return a_star(thresh, sorted_dists, True)
 
-res = a_star()
+res = iterative_deepening()
 res[0].append(res[2])
 tour = res[0]
 tour_length = res[1]
