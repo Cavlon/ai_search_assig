@@ -294,7 +294,7 @@ my_last_name = "Dantis"
 ############
 ############ END OF SECTOR 7 (IGNORE THIS COMMENT)
 
-algorithm_code = "AS"
+algorithm_code = "IA"
 
 ############ START OF SECTOR 8 (IGNORE THIS COMMENT)
 ############
@@ -359,25 +359,52 @@ added_note = ""
 #     print(f"{i}: \t {dist_matrix[i]}")
 
 def sort_dists():
-    sort_dist_mat = []
+    sort_dist_dict = dict()
     for i in range(num_cities):
-        sort_dist_mat.append([])
+        sort_dist_dict[i] = []
         dist_row = dist_matrix[i]
-        row = sort_dist_mat[i]
+        row = sort_dist_dict[i]
         for j in range(num_cities):
-            row.append((j, dist_row[j]))
-        row.sort(key=lambda x : x[1])
-    return sort_dist_mat
+            row.append((dist_row[j], j))
+        row.sort(key=lambda x : x[0])
+    return sort_dist_dict
+
+def mst(unvisited, sorted_dists):
+    edges = [(0, next(iter(unvisited)))]
+    tot = 0
+    
+    while len(unvisited) > 0 and edges:
+        edge = heapq.heappop(edges)
+        # print(edge)
+        # print(unvisited)
+        if edge[1] not in unvisited:
+            continue
+
+        tot += edge[0]
+        unvisited.discard(edge[1])
+
+        for new_edge in sorted_dists[edge[1]]:
+            if new_edge[1] in unvisited:
+                heapq.heappush(edges, new_edge)
+    # print(f"mst total: {tot}")
+    return tot
+
+def closest(row, unvisited):
+    for dist, city in row[1:]:
+        if city in unvisited:
+            return dist
 
 def heuristic(parent_state, action, sorted_dists):
-    avoid = set(parent_state)
-    
-    sorted_row = sorted_dists[action]
+    unvisited = set(range(num_cities)) - set(parent_state) - {action}    
+    h = closest(sorted_dists[action], unvisited)
 
-    for i in range(1, num_cities):
-        city = sorted_row[i][0]
-        if city not in avoid:
-            return city
+    if parent_state:
+        h += closest(sorted_dists[0], unvisited)
+    else:
+        h = h * 2
+    
+    h += mst(unvisited, sorted_dists)
+    return h
 
 def a_star(f_max, sorted_dists, final):
     goals = []

@@ -158,7 +158,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile012.txt"
+input_file = "AISearchfile021.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -358,27 +358,51 @@ added_note = ""
 #     print(f"{i}: \t {dist_matrix[i]}")
 
 def sort_dists():
-    sort_dist_mat = []
+    sort_dist_dict = dict()
     for i in range(num_cities):
-        sort_dist_mat.append([])
+        sort_dist_dict[i] = []
         dist_row = dist_matrix[i]
-        row = sort_dist_mat[i]
+        row = sort_dist_dict[i]
         for j in range(num_cities):
-            row.append((j, dist_row[j]))
-        row.sort(key=lambda x : x[1])
-    return sort_dist_mat
+            row.append((dist_row[j], j))
+        row.sort(key=lambda x : x[0])
+    return sort_dist_dict
+
+def mst(unvisited, sorted_dists):
+    edges = [(0, next(iter(unvisited)))]
+    tot = 0
+    
+    while len(unvisited) > 0 and edges:
+        edge = heapq.heappop(edges)
+        if edge[1] not in unvisited:
+            continue
+
+        tot += edge[0]
+        unvisited.discard(edge[1])
+
+        for new_edge in sorted_dists[edge[1]]:
+            if new_edge[1] in unvisited:
+                heapq.heappush(edges, new_edge)
+    return tot
+
+def closest(row, unvisited):
+    for dist, city in row[1:]:
+        if city in unvisited:
+            return dist
 
 def heuristic(parent_state, action, sorted_dists):
-    avoid = set(parent_state)
+    unvisited = set(range(num_cities)) - set(parent_state) - {action}    
+    h = closest(sorted_dists[action], unvisited)
+
+    if parent_state:
+        h += closest(sorted_dists[0], unvisited)
+    else:
+        h = h * 2
     
-    sorted_row = sorted_dists[action]
+    h += mst(unvisited, sorted_dists)
+    return h
 
-    for i in range(1, num_cities):
-        city = sorted_row[i][0]
-        if city not in avoid:
-            return city
-
-def a_star():
+def a_star(efficient=False):
     sorted_dists = sort_dists()
 
     prev = 0
@@ -400,9 +424,9 @@ def a_star():
 
         pc = node[1]
 
-        # if score > prev:
-        #     prev = score
-        #     print(prev)
+        if score > prev:
+            prev = score
+            print(prev)
 
         if pc == score:
             return node
@@ -414,34 +438,25 @@ def a_star():
         
         tot_actions = len(actions)
         full = (tot_actions == 1)
-        alm_full = (tot_actions == 2)
         last_city_dists = dist_matrix[state[-1]]
         for action in actions:
 
             cost = pc + last_city_dists[action]
             if full:
                 cost += dist_matrix[action][state[0]]
+                if efficient:
+                    return (state, cost, action)
                 if cost > lowest_goal:
                     continue
                 lowest_goal = cost
                 evaluation = cost
             else:
-                if cost > lowest_goal:
-                    continue
-                if alm_full:
-                    check = all_cities - set(state) - {action}
-                    city = next(iter(check))
-                    evaluation = dist_matrix[action][city] + dist_matrix[city][state[0]] + cost
-                else:
-                    evaluation = heuristic(state, action, sorted_dists) + cost
+                evaluation = heuristic(state, action, sorted_dists) + cost
 
             if evaluation > lowest_goal:
                 continue
             new_node = (state, cost, action)
 
-            # print(evalset)
-            # print(F)
-            # breakpoint()
             if evaluation in F:               
                 F[evaluation].append(new_node)
             else:
