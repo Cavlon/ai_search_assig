@@ -15,7 +15,8 @@ import os
 import sys
 import time
 import random
-import heapq
+import copy
+import math
 
 ############ START OF SECTOR 0 (IGNORE THIS COMMENT)
 ############
@@ -293,7 +294,7 @@ my_last_name = "Dantis"
 ############
 ############ END OF SECTOR 7 (IGNORE THIS COMMENT)
 
-algorithm_code = "AS"
+algorithm_code = "PS"
 
 ############ START OF SECTOR 8 (IGNORE THIS COMMENT)
 ############
@@ -357,118 +358,98 @@ added_note = ""
 # for i in range(num_cities):
 #     print(f"{i}: \t {dist_matrix[i]}")
 
-def sort_dists():
-    sort_dist_dict = dict()
-    for i in range(num_cities):
-        sort_dist_dict[i] = []
-        dist_row = dist_matrix[i]
-        row = sort_dist_dict[i]
-        for j in range(num_cities):
-            row.append((dist_row[j], j))
-        row.sort(key=lambda x : x[0])
-    return sort_dist_dict
+def evaluate(tour):
+    cost = 0
+    for i in range(num_cities-1):
+        cost += dist_matrix[tour[i]][tour[i+1]]
+    cost += dist_matrix[tour[num_cities-1]][0]
+    # print(cost)
+    return cost
 
-def mst(unvisited, sorted_dists):
-    edges = [(0, next(iter(unvisited)))]
-    tot = 0
-    
-    while len(unvisited) > 0 and edges:
-        edge = heapq.heappop(edges)
-        if edge[1] not in unvisited:
-            continue
+def order(tour, city1, city2):
+    for i in range(1, num_cities):
+        if tour[i] == city2:
+            return False
+        elif tour[i] == city1:
+            return True
 
-        tot += edge[0]
-        unvisited.discard(edge[1])
+def tour_difference(tour1, tour2):
+    diff = []
+    different = True
+    tour_copy = tour1.copy()
+    # print(tour2)
+    # print(tour_copy)
+    while different:
+        different = False
+        for i in range(1, num_cities-1):
+            city1 = tour_copy[i]
+            city2 = tour_copy[i+1]
+            # print((city1, city2))
+            if not order(tour2, city1, city2):
+                diff.append((i, i+1))
+                tour_copy[i], tour_copy[i+1] = tour_copy[i+1], tour_copy[i]
+                different = True
+    return diff
+                
 
-        for new_edge in sorted_dists[edge[1]]:
-            if new_edge[1] in unvisited:
-                heapq.heappush(edges, new_edge)
-    return tot
 
-def closest(row, unvisited):
-    for dist, city in row[1:]:
-        if city in unvisited:
-            return dist
+def PSO():
+    theta = 0.5
+    alpha = 0.75
+    beta = 2.75
 
-def heuristic(parent_state, action, sorted_dists):
-    unvisited = set(range(num_cities)) - set(parent_state) - {action}    
-    h = closest(sorted_dists[action], unvisited)
+    p = [[j for j in range(1, num_cities)] for i in range(num_parts)]
+    v = [[] for i in range(num_parts)]
+    for i in range(num_parts):
+        random.shuffle(p[i])
+        p[i] = [0] + p[i]
+        rand_vels = random.randint(0, 5)
+        for j in range(rand_vels):
+            city1 = random.randint(1, num_cities-2)
+            city2 = city1 + 1
+            # while True:
+            #     city2 = random.randint(1, num_cities)
+            #     if city2 != city1:
+            #         break
+            v[i].append((city1, city2))
 
-    if parent_state:
-        h += closest(sorted_dists[0], unvisited)
-    else:
-        h = h * 2
-    
-    h += mst(unvisited, sorted_dists)
-    return h
+    p_bests = copy.deepcopy(p)
+    best = min(p, key=evaluate).copy()
+    # print(p)
+    # print(best)
 
-def a_star(efficient=False):
-    sorted_dists = sort_dists()
+    t = 0
+    while t < max_it:
+        for i in range(num_parts):
+            for swap in v[i]:
+                p[i][swap[0]], p[i][swap[1]] = p[i][swap[1]], p[i][swap[0]]
 
-    prev = 0
-    all_cities = set(range(num_cities))
-    root = ([], 0, 0)
-    init_eval = heuristic([], 0, sorted_dists)
+            v[i] = v[i][:math.ceil(len(v[i]) * theta)]
+            local_diff = tour_difference(p[i], p_bests[i])
+            best_diff = tour_difference(p[i], best)
+            epsilon = random.random()
+            epsilon2 = random.random()
+            v[i] = v[i] + local_diff[:math.ceil(len(local_diff) * epsilon * alpha)]
+            v[i] = v[i] + best_diff[:math.ceil(len(best_diff) * epsilon2 * beta)]
 
-    F = {init_eval : [root]}
-    evals = [init_eval]
+            new_eval = evaluate(p[i])
+            best_eval = evaluate(p_bests[i])
+            if new_eval < best_eval:
+                p_bests[i] = p[i].copy()
+        generation_best = min(p_bests, key=evaluate)
+        if evaluate(generation_best) < evaluate(best):
+            best = generation_best.copy()
+        t += 1
+        # print(best)
+        # print(evaluate(best))
+    global tour
+    global tour_length
+    tour = best
+    tour_length = evaluate(best)
 
-    lowest_goal = sys.maxsize
-    while F:
-        score = evals[0]
-        node = F[score].pop()
-
-        if len(F[score]) == 0:
-            del F[score]
-            heapq.heappop(evals)
-
-        pc = node[1]
-
-        if score > prev:
-            prev = score
-            print(prev)
-
-        if pc == score:
-            return node
-        
-        state = node[0].copy()
-        state.append(node[2])
-
-        actions = all_cities - set(state)
-        
-        tot_actions = len(actions)
-        full = (tot_actions == 1)
-        last_city_dists = dist_matrix[state[-1]]
-        for action in actions:
-
-            cost = pc + last_city_dists[action]
-            if full:
-                cost += dist_matrix[action][state[0]]
-                if efficient:
-                    return (state, cost, action)
-                if cost > lowest_goal:
-                    continue
-                lowest_goal = cost
-                evaluation = cost
-            else:
-                evaluation = heuristic(state, action, sorted_dists) + cost
-
-            if evaluation > lowest_goal:
-                continue
-            new_node = (state, cost, action)
-
-            if evaluation in F:               
-                F[evaluation].append(new_node)
-            else:
-                heapq.heappush(evals, evaluation)
-                F[evaluation] = [new_node]
-    return False
-
-res = a_star()
-res[0].append(res[2])
-tour = res[0]
-tour_length = res[1]
-# print(res)
+max_it = 1000
+num_parts = 100
+PSO()
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
 ############
