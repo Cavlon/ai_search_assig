@@ -373,7 +373,7 @@ def order(tour, city1, city2):
         elif tour[i] == city1:
             return True
 
-def tour_difference(tour1, tour2):
+def tour_difference_bubble(tour1, tour2):
     diff = []
     different = True
     tour_copy = tour1.copy()
@@ -391,65 +391,126 @@ def tour_difference(tour1, tour2):
                 different = True
     return diff
                 
+def tour_difference(tour1, tour2):
+    diff = []
+    permutation = []
+    # unvisited = [i for i in range(1, num_cities)]
+    unvisited = set(range(1, num_cities))
+    index_map = {city: index for index, city in enumerate(tour1)}
+    while unvisited:
+        new_perm = [unvisited.pop()]
+        current_city = new_perm[0]
 
+        while True:
+            ind = index_map[current_city]
+            perm_val = tour2[ind]
+            if perm_val == new_perm[0]:
+                break
+            new_perm.append(perm_val)
+            unvisited.remove(perm_val)
+            current_city = perm_val
+        permutation.append(new_perm)
+    permutation.sort(key=lambda x : (len(x), num_cities - x[0]), reverse=True)
+    # print(permutation)
+    for perm in permutation:
+        if len(perm) == 1:
+            break
+        for i in range(len(perm) - 1):
+            diff.append((perm[i], perm[i+1]))
+    return diff
 
 def PSO():
     theta = 0.5
-    alpha = 0.75
-    beta = 2.75
+    alpha = 0.6
+    beta = 2.7
 
-    p = [[j for j in range(1, num_cities)] for i in range(num_parts)]
-    v = [[] for i in range(num_parts)]
+    # p = [[j for j in range(1, num_cities)] for i in range(num_parts)]
+    # v = [[] for i in range(num_parts)]
+    # for i in range(num_parts):
+    #     random.shuffle(p[i])
+    #     p[i] = [0] + p[i]
+    #     rand_vels = random.randint(0, 15)
+    #     for j in range(rand_vels):
+    #         city1 = random.randint(1, num_cities-1)
+    #         # city2 = city1 + 1
+    #         city2 = None
+    #         while True:
+    #             city2 = random.randint(1, num_cities-1)
+    #             if city2 != city1:
+    #                 break
+    #         v[i].append((city1, city2))
+    
+    p = []
+    v = []
+    
     for i in range(num_parts):
-        random.shuffle(p[i])
-        p[i] = [0] + p[i]
-        rand_vels = random.randint(0, 5)
-        for j in range(rand_vels):
-            city1 = random.randint(1, num_cities-2)
-            city2 = city1 + 1
-            # while True:
-            #     city2 = random.randint(1, num_cities)
-            #     if city2 != city1:
-            #         break
-            v[i].append((city1, city2))
+        pos = list(range(1, num_cities))
+        random.shuffle(pos)
+        pos = [0] + pos
+        p.append(pos)
+
+        v.append([])
+        rand_vels = random.randint(0, 15)
+        while len(v[i]) < rand_vels:
+            city1 = random.randint(1, num_cities - 1)
+            city2 = random.randint(1, num_cities - 1)
+            if city2 != city1:
+                v[i].append((city1, city2))
 
     p_bests = copy.deepcopy(p)
-    best = min(p, key=evaluate).copy()
-    # print(p)
-    # print(best)
+    p_best_scores = []
+
+    best_ind = 0
+    p_best_scores.append(evaluate(p[0]))
+    best_score = p_best_scores[0]
+    for i in range(1, num_parts):
+        p_best_scores.append(evaluate(p[i]))
+        if p_best_scores[i] < best_score:
+            best_score = p_best_scores[i]
+            best_ind = i
+
+    best = p[best_ind].copy()
 
     t = 0
     while t < max_it:
         for i in range(num_parts):
-            for swap in v[i]:
-                p[i][swap[0]], p[i][swap[1]] = p[i][swap[1]], p[i][swap[0]]
+            if t % 20 == 0:
+                next_pos = p[i].copy()
+                for swap in v[i]:
+                    next_pos[swap[0]], next_pos[swap[1]] = next_pos[swap[1]], next_pos[swap[0]]
+                v[i] = tour_difference(p[i], next_pos)
+                p[i] = next_pos
+            else:
+                for swap in v[i]:
+                    p[i][swap[0]], p[i][swap[1]] = p[i][swap[1]], p[i][swap[0]]
 
             v[i] = v[i][:math.ceil(len(v[i]) * theta)]
             local_diff = tour_difference(p[i], p_bests[i])
             best_diff = tour_difference(p[i], best)
             epsilon = random.random()
             epsilon2 = random.random()
-            v[i] = v[i] + local_diff[:math.ceil(len(local_diff) * epsilon * alpha)]
-            v[i] = v[i] + best_diff[:math.ceil(len(best_diff) * epsilon2 * beta)]
+            v[i] += local_diff[:math.ceil(len(local_diff) * epsilon * alpha)]
+            v[i] += best_diff[:math.ceil(len(best_diff) * epsilon2 * beta)]
 
             new_eval = evaluate(p[i])
-            best_eval = evaluate(p_bests[i])
-            if new_eval < best_eval:
+            if new_eval < p_best_scores[i]:
                 p_bests[i] = p[i].copy()
-        generation_best = min(p_bests, key=evaluate)
-        if evaluate(generation_best) < evaluate(best):
-            best = generation_best.copy()
+                p_best_scores[i] = new_eval
+                if new_eval < best_score:
+                    best = p[i].copy()
+                    best_score = new_eval
         t += 1
         # print(best)
-        # print(evaluate(best))
+        # print(best_score)
     global tour
     global tour_length
     tour = best
-    tour_length = evaluate(best)
+    tour_length = best_score
 
 max_it = 1000
-num_parts = 100
+num_parts = 1000
 PSO()
+# print(tour_difference([0, 6, 5, 7, 4, 10, 12, 11, 2, 3, 1, 9, 8], [0, 11, 2, 6, 5, 7, 8, 10, 1, 9, 4, 3, 12]))
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
 ############

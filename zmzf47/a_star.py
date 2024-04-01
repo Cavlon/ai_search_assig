@@ -426,7 +426,7 @@ def a_star(efficient=False):
 
         if score > prev:
             prev = score
-            print(prev)
+            # print(prev)
 
         if pc == score:
             return node
