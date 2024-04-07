@@ -15,7 +15,7 @@ import os
 import sys
 import time
 import random
-import copy
+import time
 import math
 
 ############ START OF SECTOR 0 (IGNORE THIS COMMENT)
@@ -357,18 +357,27 @@ added_note = ""
 
 # for i in range(num_cities):
 #     print(f"{i}: \t {dist_matrix[i]}")
+dist_dict = {i: {j: y for j, y in enumerate(x)} for i,x in enumerate(dist_matrix)}
 
-def evaluate(tour):
+def evaluate(tour, even):
     cost = 0
-    for i in range(num_cities-1):
-        cost += dist_matrix[tour[i]][tour[i+1]]
-    cost += dist_matrix[tour[-1]][0]
+    if even:
+        dists = dist_dict[tour[0]]
+        cost += dists[tour[-1]] + dists[tour[1]]
+        for i in range(2, num_cities, 2):
+            dists = dist_dict[tour[i]]
+            cost += dists[tour[i-1]] + dists[tour[i+1]]
+    else:
+        cost += dist_dict[tour[0]][tour[-1]]
+        for i in range(1, num_cities, 2):
+            dists = dist_dict[tour[i]]
+            cost += dists[tour[i-1]] + dists[tour[i+1]]
     return cost
                 
-def tour_difference(tour1, tour2):
+def tour_difference(tour1, tour2, index_map):
     diff = []
 
-    index_map = {city: index for index, city in enumerate(tour2)}
+    # index_map = {city: index for index, city in enumerate(tour2)}
     copy = tour1.copy()
     while copy != tour2:
         for i in range(1, num_cities):
@@ -378,7 +387,7 @@ def tour_difference(tour1, tour2):
                 copy[i], copy[ind] = copy[ind], copy[i]
     return diff
 
-def init(p, v, local_diffs, best_diffs, p_bests):
+def init(p, v, local_diffs, best_diffs, p_bests, p_bests_ind_map, update_bests):
     for i in range(num_parts):
         pos = list(range(1, num_cities))
         random.shuffle(pos)
@@ -387,6 +396,9 @@ def init(p, v, local_diffs, best_diffs, p_bests):
         p_bests.append(pos)
         local_diffs.append([])
         best_diffs.append([])
+        update_bests.append(True)
+
+        p_bests_ind_map.append({city: index for index, city in enumerate(pos)})
 
         v.append([])
         rand_vels = random.randint(0, 15)
@@ -396,86 +408,130 @@ def init(p, v, local_diffs, best_diffs, p_bests):
             if city2 != city1:
                 v[i].append((city1, city2))
 
-def PSO(theta, alpha, beta): 
+def PSO(theta, alpha, beta, runtime): 
+    start_time = time.time()
+    
     p = []
     v = []
+
     local_diffs = []
     best_diffs = []
-    p_bests = []
-    p_best_scores = []
 
-    init(p, v, local_diffs, best_diffs, p_bests)
+    p_bests = []
+    p_bests_ind_map = []
+    p_best_scores = []
+    update_bests = []
+
+    even = ((num_cities % 2) == 0)
+
+    init(p, v, local_diffs, best_diffs, p_bests, p_bests_ind_map, update_bests)
 
     best_ind = 0
-    p_best_scores.append(evaluate(p[0]))
+    p_best_scores.append(evaluate(p[0], even))
     best_score = p_best_scores[0]
     for i in range(1, num_parts):
-        p_best_scores.append(evaluate(p[i]))
+        p_best_scores.append(evaluate(p[i], even))
         if p_best_scores[i] < best_score:
             best_score = p_best_scores[i]
             best_ind = i
 
     best = p[best_ind].copy()
+    best_ind_map = {city: index for index, city in enumerate(best)}
 
     inertia = math.ceil(1 / theta)
     t = 0
-    while t < max_it:
+    while time.time() - start_time < runtime:
         for i in range(num_parts):
-            if t % 5 == 0:
+            if update_bests[i]:
+                update_bests[i] = False
+                best_diffs[i] = tour_difference(p_bests[i], best, best_ind_map)
+
+            if t % 3 == 0:
                 next_pos = p[i].copy()
                 for swap in v[i]:
                     next_pos[swap[0]], next_pos[swap[1]] = next_pos[swap[1]], next_pos[swap[0]]
-                v[i] = tour_difference(p[i], next_pos)
+                v[i] = tour_difference(p[i], next_pos, {city: index for index, city in enumerate(next_pos)})
                 p[i] = next_pos
-                local_diffs[i] = tour_difference(next_pos, p_bests[i])
-                best_diffs[i] = tour_difference(next_pos, best)
+                local_diffs[i] = tour_difference(next_pos, p_bests[i], p_bests_ind_map[i])
             else:
                 for swap in v[i]:
                     p[i][swap[0]], p[i][swap[1]] = p[i][swap[1]], p[i][swap[0]]
-                rev = reversed(v[i])
-                local_diffs[i] += rev
-                best_diffs[i] += rev
+                local_diffs[i] += reversed(v[i])
             
             local_len = len(local_diffs[i])
-            best_len = len(best_diffs[i])
+            local_to_best = local_diffs[i] + best_diffs[i]
+            best_len = len(local_to_best)
             vel_len = len(v[i])
 
-            if vel_len > 0:
-                v[i] = [v[i][j] for j in range(vel_len) if j % inertia == 0]
+            v[i] = [v[i][j] for j in range(vel_len) if j % inertia == 0]
 
             if local_len > 2:
-                epsilon = math.ceil(random.randint(1, local_len) * alpha)
+                epsilon = math.ceil(random.random() * local_len * alpha)
                 v[i] += [local_diffs[i][j] for j in range(local_len) if j % epsilon == 0]
             else:
                 v[i] += local_diffs[i]
 
             if best_len > 2:
-                epsilon2 = math.ceil(random.randint(1, best_len) * beta)
-                v[i] += [best_diffs[i][j] for j in range(best_len) if j % epsilon2 == 0]
+                epsilon2 = math.ceil(random.random() * best_len * beta)
+                v[i] += [local_to_best[j] for j in range(best_len) if j % epsilon2 == 0]
             else:
-                v[i] += best_diffs[i]
+                v[i] += local_to_best
 
-            new_eval = evaluate(p[i])
+            new_eval = evaluate(p[i], even)
             if new_eval < p_best_scores[i]:
                 p_bests[i] = p[i].copy()
                 p_best_scores[i] = new_eval
                 local_diffs[i] = []
+                p_bests_ind_map[i] = {city: index for index, city in enumerate(p_bests[i])}
                 if new_eval < best_score:
                     best = p[i].copy()
                     best_score = new_eval
                     best_diffs[i] = []
+                    best_ind_map = {city: index for index, city in enumerate(best)}
+                    update_bests = [True] * num_parts
+                    continue
+                
+                update_bests[i] = True
         t += 1
+        if max_it:
+            if t >= max_it:
+                break
         # print(best)
         # print(best_score)
-    global tour
-    global tour_length
-    tour = best
-    tour_length = best_score
+    return (best, best_score)
 
-max_it = 1000
+max_it = None
 num_parts = 1000
-PSO(0.6, 0.5, 2.7)
-# print(tour_difference([0, 6, 5, 7, 4, 10, 12, 11, 2, 3, 1, 9, 8], [0, 11, 2, 6, 5, 7, 8, 10, 1, 9, 4, 3, 12]))
+
+tot = 0
+trials = 10
+for i in range(trials):
+    res = PSO(0.75, 0.3, 0.9, 20)
+    tot += res[1]
+print(tot / trials)
+# tour = res[0]
+# tour_length = res[1]
+
+# 0.5 0.5 0.7 1500      1658.1
+# 0.5 0.5 0.8 1500      1556.5
+# 0.5 0.5 0.6 1500      1677.3
+# 0.5 0.5 0.7 16        1929
+# 0.5 0.5 0.7 2000      1654.8
+# 0.5 0.5 0.7 1000      1649.1
+# 0.5 0.5 0.7 800       1663.7
+# 0.5 0.6 0.7 1500      1628.1
+# 0.6 0.5 0.8 1500      1613.2
+# 0.5 0.6 0.8 1500      1668.6
+# 0.5 0.9 0.4 1500      1687.4
+# 0.5 0.7 0.4 1500      1666.7
+# 0.5 0.4 0.8 1500      1602.2
+# 0.6 0.6 0.8 1500      1628.1
+# 0.6 0.4 0.7 1500      1621.6
+# 0.04 0.4 0.96 1500    1634.3
+# 0.6 0.4 0.8 1500      1620.3
+# 0.6 0.3 0.9 1500      1603.7
+# 0.7 0.3 0.9 1500      1573.6
+# 0.75 0.3 0.9 1500     1565.9
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
 ############
