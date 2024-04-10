@@ -14,7 +14,6 @@
 import os
 import sys
 import time
-import random
 import heapq
 
 ############ START OF SECTOR 0 (IGNORE THIS COMMENT)
@@ -354,16 +353,36 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-# for i in range(num_cities):
-#     print(f"{i}: \t {dist_matrix[i]}")
+cities_range = range(num_cities)
+
+# Performs the nearest neighbour algorithm to quickly complete a partial tour
+def nearest_neighbour(part_tour, cost, sorted_dists, all_cities):
+    # Finds what cities haven't been visited yet
+    unvisited = all_cities - set(part_tour)
+    remaining = num_cities - len(part_tour)
+    # Iteratively adds each remaining city
+    for i in range(remaining):
+        # Adds the city closest to the current last city
+        last_dists = sorted_dists[part_tour[-1]]
+        close = closest(last_dists, unvisited)
+        part_tour.append(close[1])
+        cost += close[0]
+        unvisited.discard(close[1])
+    # Returns the completed tour
+    global tour
+    global tour_length
+    tour = part_tour
+    tour_length = cost + dist_matrix[tour[0]][tour[-1]]
+
 
 def sort_dists():
+    global cities_range
     sort_dist_dict = dict()
-    for i in range(num_cities):
+    for i in cities_range:
         sort_dist_dict[i] = []
         dist_row = dist_matrix[i]
         row = sort_dist_dict[i]
-        for j in range(num_cities):
+        for j in cities_range:
             row.append((dist_row[j], j))
         row.sort(key=lambda x : x[0])
     return sort_dist_dict
@@ -388,33 +407,35 @@ def mst(unvisited, sorted_dists):
 def closest(row, unvisited):
     for dist, city in row[1:]:
         if city in unvisited:
-            return dist
+            return (dist, city)
 
-def heuristic(parent_state, action, sorted_dists):
-    unvisited = set(range(num_cities)) - set(parent_state) - {action}    
-    h = closest(sorted_dists[action], unvisited)
+def heuristic(parent_state, action, sorted_dists, all_cities):
+    unvisited = all_cities - set(parent_state) - {action}    
+    h = closest(sorted_dists[action], unvisited)[0]
 
     if parent_state:
-        h += closest(sorted_dists[0], unvisited)
+        h += closest(sorted_dists[0], unvisited)[0]
     else:
         h = h * 2
     
     h += mst(unvisited, sorted_dists)
     return h
 
-def a_star(efficient=False):
+def a_star(runtime):
+    start_time = time.time()
     sorted_dists = sort_dists()
 
-    prev = 0
-    all_cities = set(range(num_cities))
+    global cities_range
+    # prev = 0
+    all_cities = set(cities_range)
     root = ([], 0, 0)
-    init_eval = heuristic([], 0, sorted_dists)
+    init_eval = heuristic([], 0, sorted_dists, all_cities)
 
     F = {init_eval : [root]}
     evals = [init_eval]
 
     lowest_goal = sys.maxsize
-    while F:
+    while (F and (time.time() - start_time < runtime)):
         score = evals[0]
         node = F[score].pop()
 
@@ -424,12 +445,17 @@ def a_star(efficient=False):
 
         pc = node[1]
 
-        if score > prev:
-            prev = score
+        # if score > prev:
+        #     prev = score
             # print(prev)
 
         if pc == score:
-            return node
+            global tour
+            global tour_length
+            node[0].append(node[2])
+            tour = node[0]
+            tour_length = node[1]
+            return
         
         state = node[0].copy()
         state.append(node[2])
@@ -440,18 +466,15 @@ def a_star(efficient=False):
         full = (tot_actions == 1)
         last_city_dists = dist_matrix[state[-1]]
         for action in actions:
-
             cost = pc + last_city_dists[action]
             if full:
                 cost += dist_matrix[action][state[0]]
-                if efficient:
-                    return (state, cost, action)
                 if cost > lowest_goal:
                     continue
                 lowest_goal = cost
                 evaluation = cost
             else:
-                evaluation = heuristic(state, action, sorted_dists) + cost
+                evaluation = heuristic(state, action, sorted_dists, all_cities) + cost
 
             if evaluation > lowest_goal:
                 continue
@@ -462,12 +485,14 @@ def a_star(efficient=False):
             else:
                 heapq.heappush(evals, evaluation)
                 F[evaluation] = [new_node]
+    score = evals[0]
+    node = F[score].pop()
+    cost = node[1]
+    part_tour = node[0] + [node[2]]
+    nearest_neighbour(part_tour, cost, sorted_dists, all_cities)
     return False
 
-res = a_star()
-res[0].append(res[2])
-tour = res[0]
-tour_length = res[1]
+res = a_star(118)
 # print(res)
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)

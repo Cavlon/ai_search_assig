@@ -17,6 +17,7 @@ import time
 import random
 import time
 import math
+import itertools
 
 ############ START OF SECTOR 0 (IGNORE THIS COMMENT)
 ############
@@ -358,17 +359,18 @@ added_note = ""
 # for i in range(num_cities):
 #     print(f"{i}: \t {dist_matrix[i]}")
 dist_dict = {i: {j: y for j, y in enumerate(x)} for i,x in enumerate(dist_matrix)}
+even = ((num_cities % 2) == 0)
 
-def evaluate(tour, even):
+def evaluate(tour):
     cost = 0
     if even:
         dists = dist_dict[tour[0]]
-        cost += dists[tour[-1]] + dists[tour[1]]
+        cost += dists[tour[num_cities-1]] + dists[tour[1]]
         for i in range(2, num_cities, 2):
             dists = dist_dict[tour[i]]
             cost += dists[tour[i-1]] + dists[tour[i+1]]
     else:
-        cost += dist_dict[tour[0]][tour[-1]]
+        cost += dist_dict[tour[0]][tour[num_cities-1]]
         for i in range(1, num_cities, 2):
             dists = dist_dict[tour[i]]
             cost += dists[tour[i-1]] + dists[tour[i+1]]
@@ -385,22 +387,36 @@ def tour_difference(tour1, tour2, index_map):
                 ind = index_map[copy[i]]
                 diff.append((i, ind))
                 copy[i], copy[ind] = copy[ind], copy[i]
+
+    # unvisited = set(range(1, num_cities))
+    # while unvisited:
+    #     current_city = unvisited.pop()
+
+    #     while True:
+    #         ind = index_map[current_city]
+    #         perm_val = tour1[ind]
+    #         if perm_val == new_perm[0]:
+    #             break
+    #         new_perm.append(perm_val)
+    #         unvisited.remove(perm_val)
+    #         current_city = perm_val
+    #     permutation.append(new_perm)
     return diff
 
-def init(p, v, local_diffs, best_diffs, p_bests, p_bests_ind_map, update_bests):
+def init(p, v, local_diffs, best_diffs, p_bests, p_bests_ind_map):
     for i in range(num_parts):
         pos = list(range(1, num_cities))
         random.shuffle(pos)
         pos = [0] + pos
-        p.append(pos)
-        p_bests.append(pos)
-        local_diffs.append([])
-        best_diffs.append([])
-        update_bests.append(True)
+        pos = {i:pos[i] for i in range(num_cities)}
+        p[i] = pos
+        p_bests[i] = pos.copy()
+        local_diffs[i] = []
+        best_diffs[i] = []
 
-        p_bests_ind_map.append({city: index for index, city in enumerate(pos)})
+        p_bests_ind_map[i] = {city: index for index, city in pos.items()}
 
-        v.append([])
+        v[i] = []
         rand_vels = random.randint(0, 15)
         while len(v[i]) < rand_vels:
             city1 = random.randint(1, num_cities - 1)
@@ -408,130 +424,179 @@ def init(p, v, local_diffs, best_diffs, p_bests, p_bests_ind_map, update_bests):
             if city2 != city1:
                 v[i].append((city1, city2))
 
+def sigmoid(x):
+    return 1 / (1 + math.exp(-x))
+
+# def take_n_elements(arr, n):
+#     interval = len(arr) / float(n)
+
+#     return [arr[int(i * interval)] for i in range(n)]
+
+    
+
 def PSO(theta, alpha, beta, runtime): 
     start_time = time.time()
     
-    p = []
-    v = []
+    p = dict()
+    v = dict()
 
-    local_diffs = []
-    best_diffs = []
+    local_diffs = dict()
+    best_diffs = dict()
 
-    p_bests = []
-    p_bests_ind_map = []
-    p_best_scores = []
-    update_bests = []
+    p_bests = dict()
+    p_bests_ind_map = dict()
+    p_best_scores = dict()
 
-    even = ((num_cities % 2) == 0)
-
-    init(p, v, local_diffs, best_diffs, p_bests, p_bests_ind_map, update_bests)
+    init(p, v, local_diffs, best_diffs, p_bests, p_bests_ind_map)
 
     best_ind = 0
-    p_best_scores.append(evaluate(p[0], even))
+    p_best_scores[0] = evaluate(p[0])
     best_score = p_best_scores[0]
     for i in range(1, num_parts):
-        p_best_scores.append(evaluate(p[i], even))
+        p_best_scores[i] = evaluate(p[i])
         if p_best_scores[i] < best_score:
             best_score = p_best_scores[i]
             best_ind = i
 
     best = p[best_ind].copy()
-    best_ind_map = {city: index for index, city in enumerate(best)}
+    best_ind_map = p_bests_ind_map[best_ind].copy()
 
     inertia = math.ceil(1 / theta)
     t = 0
+    cog = alpha
+    soc = beta
     while time.time() - start_time < runtime:
+        # inertia = 1 / sigmoid(theta)
+        # cog = sigmoid(alpha)
+        # soc = sigmoid(beta)
         for i in range(num_parts):
-            if update_bests[i]:
-                update_bests[i] = False
-                best_diffs[i] = tour_difference(p_bests[i], best, best_ind_map)
 
-            if t % 3 == 0:
+            if t % 2 == 0:
                 next_pos = p[i].copy()
                 for swap in v[i]:
                     next_pos[swap[0]], next_pos[swap[1]] = next_pos[swap[1]], next_pos[swap[0]]
-                v[i] = tour_difference(p[i], next_pos, {city: index for index, city in enumerate(next_pos)})
+                v[i] = tour_difference(p[i], next_pos, {city: index for index, city in next_pos.items()})
                 p[i] = next_pos
                 local_diffs[i] = tour_difference(next_pos, p_bests[i], p_bests_ind_map[i])
+                best_diffs[i] = tour_difference(next_pos, best, best_ind_map)
             else:
                 for swap in v[i]:
                     p[i][swap[0]], p[i][swap[1]] = p[i][swap[1]], p[i][swap[0]]
-                local_diffs[i] += reversed(v[i])
+                rev = reversed(v[i])
+                local_diffs[i] += rev
+                best_diffs[i] += rev
             
             local_len = len(local_diffs[i])
-            local_to_best = local_diffs[i] + best_diffs[i]
-            best_len = len(local_to_best)
+            best_len = len(best_diffs[i])
             vel_len = len(v[i])
 
-            v[i] = [v[i][j] for j in range(vel_len) if j % inertia == 0]
+            if vel_len == 0:
+                # print(v[i])
+                rand_vels = int((random.random() * 5) + 5)
+                v[i] += [(math.ceil(random.random() * (num_cities - 1)), math.ceil(random.random() * (num_cities - 1))) for _ in range(rand_vels)]
+                vel_len = len(v[i])
+                # print(v[i])
 
-            if local_len > 2:
-                epsilon = math.ceil(random.random() * local_len * alpha)
+            v[i] = [v[i][j] for j in range(vel_len) if j % inertia == 0]
+            # v[i] = list(itertools.islice(v[i], math.ceil(vel_len * inertia)))
+
+            # amount = vel_len * inertia
+            # if amount != 0:
+            #     interval = vel_len / amount
+
+            #     v[i] = [v[i][int(j * interval)] for j in range(int(amount))]
+
+            if local_len > 1:
+                epsilon = math.ceil(1/(random.random() * cog))
                 v[i] += [local_diffs[i][j] for j in range(local_len) if j % epsilon == 0]
             else:
                 v[i] += local_diffs[i]
+            
 
-            if best_len > 2:
-                epsilon2 = math.ceil(random.random() * best_len * beta)
-                v[i] += [local_to_best[j] for j in range(best_len) if j % epsilon2 == 0]
+            if best_len > 1:
+                epsilon2 = math.ceil(1/(random.random() * soc))
+                v[i] += [best_diffs[i][j] for j in range(best_len) if j % epsilon2 == 0]
             else:
-                v[i] += local_to_best
+                v[i] += best_diffs[i]
 
-            new_eval = evaluate(p[i], even)
+            # epsilon = math.ceil(random.random() * cog * local_len)
+            # v[i] += list(itertools.islice(local_diffs[i], epsilon))
+                
+            # epsilon2 = math.ceil(random.random() * soc * best_len)
+            # v[i] += list(itertools.islice(best_diffs[i], epsilon2))
+
+            # amount = local_len * random.random() * cog
+            # if amount != 0:
+            #     interval = local_len / amount
+
+            #     v[i] += [local_diffs[i][int(j * interval)] for j in range(int(amount))]
+
+            # amount = best_len * random.random() * soc
+            # if amount != 0:
+            #     interval = best_len / amount
+
+            #     v[i] += [best_diffs[i][int(j * interval)] for j in range(int(amount))]
+
+            # epsilon = list(itertools.islice((random.random() * alpha for _ in itertools.repeat(None)), local_len))
+            # v[i] += [local_diffs[i][j] for j in range(local_len) if epsilon[j] > 0.5]
+
+            # epsilon2 = list(itertools.islice((random.random() * beta for _ in itertools.repeat(None)), best_len))
+            # v[i] += [best_diffs[i][j] for j in range(best_len) if epsilon2[j] > 0.5]
+
+            new_eval = evaluate(p[i])
             if new_eval < p_best_scores[i]:
                 p_bests[i] = p[i].copy()
                 p_best_scores[i] = new_eval
                 local_diffs[i] = []
-                p_bests_ind_map[i] = {city: index for index, city in enumerate(p_bests[i])}
+                p_bests_ind_map[i] = {city: index for index, city in p_bests[i].items()}
                 if new_eval < best_score:
                     best = p[i].copy()
                     best_score = new_eval
                     best_diffs[i] = []
-                    best_ind_map = {city: index for index, city in enumerate(best)}
-                    update_bests = [True] * num_parts
-                    continue
-                
-                update_bests[i] = True
+                    best_ind_map = p_bests_ind_map[i].copy()
+                    new_best = True
         t += 1
+        # if new_best:
+        #     theta -= 0.005
+        #     alpha += 0.005
+        #     beta += 0.005
+        # else:
+        #     theta += 0.0001
+        #     alpha -= 0.0001
+        #     beta -= 0.0001
+        # print(new_best)
+        # print(f"theta:{inertia}   alpha:{cog}   beta:{soc}")
+        # print(p[0])
+        # print(evaluate(p[0]))
+        new_best = False
         if max_it:
             if t >= max_it:
                 break
         # print(best)
         # print(best_score)
-    return (best, best_score)
+    print(t)
+    # print(f"theta:{1/inertia}   alpha:{cog}   beta:{soc}")
+    return ([best[i] for i in range(num_cities)], best_score)
 
 max_it = None
-num_parts = 1000
+num_parts = num_cities
 
 tot = 0
-trials = 10
+trials = 1
+# print(sigmoid(0.7))
+# print(sigmoid(-0.2))
+# print(sigmoid(-0.8))
+
 for i in range(trials):
-    res = PSO(0.75, 0.3, 0.9, 20)
+    res = PSO(0.6, 0.5, 0.8, 118)
     tot += res[1]
 print(tot / trials)
-# tour = res[0]
-# tour_length = res[1]
+tour = res[0]
+tour_length = res[1]
 
-# 0.5 0.5 0.7 1500      1658.1
-# 0.5 0.5 0.8 1500      1556.5
-# 0.5 0.5 0.6 1500      1677.3
-# 0.5 0.5 0.7 16        1929
-# 0.5 0.5 0.7 2000      1654.8
-# 0.5 0.5 0.7 1000      1649.1
-# 0.5 0.5 0.7 800       1663.7
-# 0.5 0.6 0.7 1500      1628.1
-# 0.6 0.5 0.8 1500      1613.2
-# 0.5 0.6 0.8 1500      1668.6
-# 0.5 0.9 0.4 1500      1687.4
-# 0.5 0.7 0.4 1500      1666.7
-# 0.5 0.4 0.8 1500      1602.2
-# 0.6 0.6 0.8 1500      1628.1
-# 0.6 0.4 0.7 1500      1621.6
-# 0.04 0.4 0.96 1500    1634.3
-# 0.6 0.4 0.8 1500      1620.3
-# 0.6 0.3 0.9 1500      1603.7
-# 0.7 0.3 0.9 1500      1573.6
-# 0.75 0.3 0.9 1500     1565.9
+# 0.75 0.3 0.9 1000     1615.6
+# 0.6 0.5 2.7 1000      1572.5
+# 0.7 0.4 2.9 1000      1559.3
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
 ############
