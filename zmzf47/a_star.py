@@ -374,7 +374,8 @@ def nearest_neighbour(part_tour, cost, sorted_dists, all_cities):
     tour = part_tour
     tour_length = cost + dist_matrix[tour[0]][tour[-1]]
 
-
+# Creates a dictionary of lists with city distances
+# Distances are sorted from lowest to highest within each list along with their city
 def sort_dists():
     global cities_range
     sort_dist_dict = dict()
@@ -387,37 +388,56 @@ def sort_dists():
         row.sort(key=lambda x : x[0])
     return sort_dist_dict
 
+# Takes a list of cities and forms the sum of the edges in its MST
+# Uses Prim's algorithm to form the MST
 def mst(unvisited, sorted_dists):
+    # Create a min heap starting with a city from the unvisited set
+    # Edge = (edge cost, target city)
     edges = [(0, next(iter(unvisited)))]
     tot = 0
     
+    # Runs until all unvisited cities are in the MST
     while len(unvisited) > 0 and edges:
+        # Finds the connected edge with the smallest cost
         edge = heapq.heappop(edges)
+
+        # Checks if the city is already in the MST
         if edge[1] not in unvisited:
             continue
 
+        # Add the edge to the MST
         tot += edge[0]
         unvisited.discard(edge[1])
 
+        # Add all new potential edges from the target city
         for new_edge in sorted_dists[edge[1]]:
             if new_edge[1] in unvisited:
                 heapq.heappush(edges, new_edge)
     return tot
 
+# Find the city closest to another city that hasn't been visited yet
 def closest(row, unvisited):
     for dist, city in row[1:]:
         if city in unvisited:
             return (dist, city)
 
+# Calculate a heuristic for a given state and action
 def heuristic(parent_state, action, sorted_dists, all_cities):
-    unvisited = all_cities - set(parent_state) - {action}    
+    # Find all unvisited cities
+    unvisited = all_cities - set(parent_state) - {action}   
+
+    # Add the closest city to the final city in the partial tour 
     h = closest(sorted_dists[action], unvisited)[0]
 
+    # Checks if this is the root state
     if parent_state:
+        # Add the closest city to the first city (0) in the partial tour
         h += closest(sorted_dists[0], unvisited)[0]
     else:
+        # If this is the root state, the first and last city are the same
         h = h * 2
     
+    # Add the edge value sum of the MST formed from all the unvisited cities
     h += mst(unvisited, sorted_dists)
     return h
 
@@ -426,30 +446,35 @@ def a_star(runtime):
     sorted_dists = sort_dists()
 
     global cities_range
-    # prev = 0
     all_cities = set(cities_range)
+
+    # Create the root state
     root = ([], 0, 0)
     init_eval = heuristic([], 0, sorted_dists, all_cities)
 
+    # Initialise the finge dictionary and evaluation min heap
     F = {init_eval : [root]}
     evals = [init_eval]
 
     lowest_goal = sys.maxsize
+    # Run while there are still states in the fringe
     while (F and (time.time() - start_time < runtime)):
+        # Extract the smallest evaluation from the min heap
         score = evals[0]
+
+        # Extract one of the corresponding states
         node = F[score].pop()
 
+        # Remove the key from the dictionary if there are no more states with this evaluation score
         if len(F[score]) == 0:
             del F[score]
             heapq.heappop(evals)
 
         pc = node[1]
 
-        # if score > prev:
-        #     prev = score
-            # print(prev)
-
+        # If the path cost is equal to its evaluation score, it is the best full tour
         if pc == score:
+            # Return the tour
             global tour
             global tour_length
             node[0].append(node[2])
@@ -457,34 +482,47 @@ def a_star(runtime):
             tour_length = node[1]
             return
         
+        # Add the action to the partial tour
         state = node[0].copy()
         state.append(node[2])
 
+        # Generate a set of all possible actions
         actions = all_cities - set(state)
-        
         tot_actions = len(actions)
+
+        # If there is only 1 possible action then the tour is full
         full = (tot_actions == 1)
         last_city_dists = dist_matrix[state[-1]]
+
+        # Calculate an evaluation score and add each new state to the fringe
         for action in actions:
             cost = pc + last_city_dists[action]
             if full:
+                # Add the distance to the starting state
                 cost += dist_matrix[action][state[0]]
+
+                # This will never be evaluated if its worse than the best goal so there is no point computing it
                 if cost > lowest_goal:
                     continue
                 lowest_goal = cost
                 evaluation = cost
             else:
+                # Calculating the new state's evaluation score
                 evaluation = heuristic(state, action, sorted_dists, all_cities) + cost
 
+            # This will never be evaluated if its worse than the best goal so there is no point computing it
             if evaluation > lowest_goal:
                 continue
             new_node = (state, cost, action)
 
+            # Add the new state to the fringe
             if evaluation in F:               
                 F[evaluation].append(new_node)
             else:
                 heapq.heappush(evals, evaluation)
                 F[evaluation] = [new_node]
+    
+    # If a full tour isn't found in time, perform nearest neighbour to complete the best partial tour
     score = evals[0]
     node = F[score].pop()
     cost = node[1]
@@ -492,8 +530,7 @@ def a_star(runtime):
     nearest_neighbour(part_tour, cost, sorted_dists, all_cities)
     return False
 
-res = a_star(118)
-# print(res)
+a_star(58)
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
 ############
